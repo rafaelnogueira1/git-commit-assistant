@@ -1,10 +1,11 @@
 {
   "name": "git-commit-assistant",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "AI-powered Git commit assistant using Gemini",
   "main": "bin/git-commit-assistant",
   "bin": {
-    "git-commit-assistant": "./bin/git-commit-assistant"
+    "git-commit-assistant": "./bin/git-commit-assistant",
+    "gca": "./bin/git-commit-assistant"
   },
   "scripts": {
     "postinstall": "node scripts/install.js"

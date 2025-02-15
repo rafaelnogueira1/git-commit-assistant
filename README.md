@@ -48,19 +48,32 @@ export GEMINI_API_KEY='your-api-key'
 
 ## Usage
 
-Instead of `git commit`, use:
+Instead of `git commit`, you can use either:
 
 ```bash
-git-commit-assistant
+gca                 # Short command (recommended)
+git-commit-assistant  # Full command
 ```
 
-With options:
+Available options:
 
 ```bash
-git-commit-assistant -a  # Stage all changes
-git-commit-assistant -p  # Push after commit
-git-commit-assistant -f  # Skip confirmations
+gca -a              # Stage all changes
+gca -p              # Push after commit
+gca -f              # Skip confirmations
+
+# Combine options
+gca -a -p           # Stage all changes and push
+gca -a -p -f        # Stage all, push, and skip confirmations
 ```
+
+The assistant will:
+
+1. Show your staged/unstaged changes
+2. Analyze the changes using AI
+3. Suggest a commit message following conventional commits
+4. Let you edit or accept the message
+5. Create the commit (and push if requested)
 
 ## Requirements
 

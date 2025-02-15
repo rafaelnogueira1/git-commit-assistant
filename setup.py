@@ -13,6 +13,7 @@ setup(
     entry_points={
         "console_scripts": [
             "git-commit-assistant=git_commit_assistant.main:main",
+            "gca=git_commit_assistant.main:main",
         ],
     },
     author="Rafael Nogueira",

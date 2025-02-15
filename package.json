@@ -1,0 +1,32 @@
+{
+  "name": "git-commit-assistant",
+  "version": "0.1.4",
+  "description": "AI-powered Git commit assistant using Gemini",
+  "main": "bin/git-commit-assistant",
+  "bin": {
+    "git-commit-assistant": "./bin/git-commit-assistant"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rafaelnogueira1/git-commit-assistant.git"
+  },
+  "keywords": [
+    "git",
+    "commit",
+    "ai",
+    "assistant",
+    "gemini"
+  ],
+  "author": "Rafael Nogueira",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/rafaelnogueira1/git-commit-assistant/issues"
+  },
+  "homepage": "https://github.com/rafaelnogueira1/git-commit-assistant#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

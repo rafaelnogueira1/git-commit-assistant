@@ -1,0 +1,90 @@
+Metadata-Version: 2.2
+Name: git-commit-assistant
+Version: 0.1.0
+Summary: AI-powered Git commit assistant using Gemini
+Home-page: https://github.com/yourusername/git-commit-assistant
+Author: Rafael Nogueira
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests
+Requires-Dist: rich
+Requires-Dist: gitpython
+Requires-Dist: questionary
+Dynamic: author
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# Git Commit Assistant
+
+AI-powered Git commit assistant that helps you write better commit messages using Google's Gemini AI.
+
+## Features
+
+- 🤖 AI-powered commit message suggestions
+- 📝 Conventional commits format with emojis
+- 🔍 Smart analysis of your changes
+- 🎨 Beautiful CLI interface
+- 🔒 Protected branch validation
+- 🚀 Optional automatic push
+
+## Installation
+
+### Via NPM (Recommended)
+
+```bash
+npm install -g git-commit-assistant
+```
+
+### Via Python (Alternative)
+
+```bash
+pip install git-commit-assistant
+```
+
+## Setup
+
+1. Get your Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Set your API key:
+
+```bash
+export GEMINI_API_KEY='your-api-key'
+```
+
+## Usage
+
+Instead of `git commit`, use:
+
+```bash
+git-commit-assistant
+```
+
+With options:
+
+```bash
+git-commit-assistant -a  # Stage all changes
+git-commit-assistant -p  # Push after commit
+git-commit-assistant -f  # Skip confirmations
+```
+
+## Requirements
+
+- Python 3.6+
+- Node.js 14+ (for NPM installation)
+- Git
+
+## License
+
+MIT
+
+## Contributing
+
+Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.

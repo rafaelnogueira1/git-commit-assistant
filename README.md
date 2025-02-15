@@ -14,12 +14,15 @@ AI-powered Git commit assistant that helps you write better commit messages usin
 ## Installation
 
 ### Via NPM (Recommended)
+
 ```bash
 npm install -g git-commit-assistant
 ```
+
 The installation will automatically create a Python virtual environment and install all dependencies.
 
 ### Via Python (Alternative)
+
 ```bash
 # Create virtual environment
 python3 -m venv venv
@@ -31,13 +34,14 @@ source venv/bin/activate
 .\venv\Scripts\activate
 
 # Install package
-pip install git-commit-assistant
+pip3 install git-commit-assistant
 ```
 
 ## Setup
 
 1. Get your Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. Set your API key:
+
 ```bash
 export GEMINI_API_KEY='your-api-key'
 ```

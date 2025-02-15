@@ -59,20 +59,20 @@ export GEMINI_API_KEY='your-api-key'
 Instead of `git commit`, you can use either:
 
 ```bash
-gca                 # Short command (recommended)
+ga                  # Short command (recommended)
 git-commit-assistant  # Full command
 ```
 
 Available options:
 
 ```bash
-gca -a              # Stage all changes
-gca -p              # Push after commit
-gca -f              # Skip confirmations
+ga -a               # Stage all changes
+ga -p               # Push after commit
+ga -f               # Skip confirmations
 
 # Combine options
-gca -a -p           # Stage all changes and push
-gca -a -p -f        # Stage all, push, and skip confirmations
+ga -a -p            # Stage all changes and push
+ga -a -p -f         # Stage all, push, and skip confirmations
 ```
 
 The assistant will:

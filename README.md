@@ -21,6 +21,14 @@ npm install -g git-commit-assistant
 
 The installation will automatically create a Python virtual environment and install all dependencies.
 
+### Updating
+
+To update to the latest version:
+
+```bash
+npm install -g git-commit-assistant@latest
+```
+
 ### Via Python (Alternative)
 
 ```bash

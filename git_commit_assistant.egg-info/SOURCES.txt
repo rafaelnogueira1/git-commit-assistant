@@ -1,9 +1,0 @@
-LICENSE
-README.md
-setup.py
-git_commit_assistant.egg-info/PKG-INFO
-git_commit_assistant.egg-info/SOURCES.txt
-git_commit_assistant.egg-info/dependency_links.txt
-git_commit_assistant.egg-info/entry_points.txt
-git_commit_assistant.egg-info/requires.txt
-git_commit_assistant.egg-info/top_level.txt

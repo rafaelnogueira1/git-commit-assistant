@@ -28,12 +28,14 @@ async function main() {
       await runCommand('python3', ['-m', 'venv', venvPath]);
     }
 
-    // Determine the pip path based on OS
+    // Determine the pip and python paths based on OS
     const isWindows = process.platform === 'win32';
-    const pipPath = path.join(
+    const binDir = isWindows ? 'Scripts' : 'bin';
+    const pipPath = path.join(venvPath, binDir, isWindows ? 'pip.exe' : 'pip');
+    const pythonPath = path.join(
       venvPath,
-      isWindows ? 'Scripts' : 'bin',
-      isWindows ? 'pip.exe' : 'pip'
+      binDir,
+      isWindows ? 'python.exe' : 'python3'
     );
 
     // Install package in development mode
@@ -47,6 +49,26 @@ async function main() {
         pipConfigDir,
         '[global]\nbreak-system-packages = true\n'
       );
+    }
+
+    // Create symlinks for commands
+    console.log('Creating command links...');
+    const binPath = path.join(packageRoot, 'bin');
+    const commands = ['git-commit-assistant', 'ga'];
+
+    for (const cmd of commands) {
+      const cmdPath = path.join(binPath, cmd);
+      // Create the bin directory if it doesn't exist
+      if (!fs.existsSync(binPath)) {
+        fs.mkdirSync(binPath, { recursive: true });
+      }
+
+      // Create the command file
+      const cmdContent = `#!/usr/bin/env node
+require('${path.join(packageRoot, 'bin/git-commit-assistant')}');`;
+
+      fs.writeFileSync(cmdPath, cmdContent);
+      fs.chmodSync(cmdPath, '755'); // Make executable
     }
 
     console.log('Installation completed successfully!');

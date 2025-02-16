@@ -30,25 +30,21 @@ async function main() {
       `Installing in ${isDevelopment ? 'development' : 'production'} mode...`
     );
 
-    // Create virtual environment
     if (!fs.existsSync(venvPath)) {
       console.log('Creating virtual environment...');
       await runCommand('python3', ['-m', 'venv', venvPath]);
     }
 
-    // Determine the pip path based on OS
     const isWindows = process.platform === 'win32';
     const binDir = isWindows ? 'Scripts' : 'bin';
     const pipPath = path.join(venvPath, binDir, isWindows ? 'pip.exe' : 'pip');
 
-    // Install package in development mode
     console.log('Installing Python package...');
     await runCommand(
       pipPath,
       ['install', isDevelopment ? '-e' : '', packageRoot].filter(Boolean)
     );
 
-    // Create pip.conf if it doesn't exist
     const pipConfigDir = path.join(venvPath, isWindows ? 'pip' : 'pip.conf');
     if (!fs.existsSync(pipConfigDir)) {
       fs.writeFileSync(
@@ -57,9 +53,7 @@ async function main() {
       );
     }
 
-    // Only create global links if we're installing globally (not during development)
     if (isGlobalInstall && !isDevelopment) {
-      // Get npm global bin directory
       let npmGlobalPrefix;
       try {
         npmGlobalPrefix = execSync('npm config get prefix', {
@@ -70,22 +64,23 @@ async function main() {
         process.exit(1);
       }
 
-      // Create global command links
       console.log('Creating global command links...');
       const globalBinPath = isWindows
         ? npmGlobalPrefix
         : path.join(npmGlobalPrefix, 'bin');
       const commands = ['git-commit-assistant', 'gcommit'];
+      const mainScriptPath = path.join(
+        packageRoot,
+        'bin',
+        'git-commit-assistant'
+      );
 
       for (const cmd of commands) {
         const cmdPath = path.join(globalBinPath, cmd);
         try {
-          fs.writeFileSync(
-            cmdPath,
-            '#!/usr/bin/env node\n' +
-              'require("git-commit-assistant/bin/git-commit-assistant");'
-          );
-          fs.chmodSync(cmdPath, '755'); // Make executable
+          const scriptContent = fs.readFileSync(mainScriptPath, 'utf8');
+          fs.writeFileSync(cmdPath, scriptContent);
+          fs.chmodSync(cmdPath, '755');
           console.log(`Created global command: ${cmd}`);
         } catch (error) {
           console.error(`Failed to create ${cmd} command:`, error.message);

@@ -8,14 +8,12 @@ const os = require('os');
 const venvPath = path.join(os.homedir(), '.git-commit-assistant-venv');
 const isWindows = process.platform === 'win32';
 
-// Get Python path from virtual environment
 const pythonPath = path.join(
   venvPath,
   isWindows ? 'Scripts' : 'bin',
   isWindows ? 'python.exe' : 'python3'
 );
 
-// Check if virtual environment exists
 if (!fs.existsSync(pythonPath)) {
   console.error(
     'Python virtual environment not found. Please reinstall the package.'
@@ -23,7 +21,6 @@ if (!fs.existsSync(pythonPath)) {
   process.exit(1);
 }
 
-// Execute the Python script
 const pythonProcess = spawn(
   pythonPath,
   ['-m', 'git_commit_assistant.main', ...process.argv.slice(2)],

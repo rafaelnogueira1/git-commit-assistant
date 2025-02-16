@@ -22,25 +22,31 @@ function runCommand(command, args, options = {}) {
 
 async function main() {
   try {
+    const isGlobalInstall = process.env.npm_config_global === 'true';
+    const isDevelopment =
+      process.env.NODE_ENV === 'development' || !isGlobalInstall;
+
+    console.log(
+      `Installing in ${isDevelopment ? 'development' : 'production'} mode...`
+    );
+
     // Create virtual environment
     if (!fs.existsSync(venvPath)) {
       console.log('Creating virtual environment...');
       await runCommand('python3', ['-m', 'venv', venvPath]);
     }
 
-    // Determine the pip and python paths based on OS
+    // Determine the pip path based on OS
     const isWindows = process.platform === 'win32';
     const binDir = isWindows ? 'Scripts' : 'bin';
     const pipPath = path.join(venvPath, binDir, isWindows ? 'pip.exe' : 'pip');
-    const pythonPath = path.join(
-      venvPath,
-      binDir,
-      isWindows ? 'python.exe' : 'python3'
-    );
 
     // Install package in development mode
     console.log('Installing Python package...');
-    await runCommand(pipPath, ['install', '-e', packageRoot]);
+    await runCommand(
+      pipPath,
+      ['install', isDevelopment ? '-e' : '', packageRoot].filter(Boolean)
+    );
 
     // Create pip.conf if it doesn't exist
     const pipConfigDir = path.join(venvPath, isWindows ? 'pip' : 'pip.conf');
@@ -51,27 +57,48 @@ async function main() {
       );
     }
 
-    // Create symlinks for commands
-    console.log('Creating command links...');
-    const binPath = path.join(packageRoot, 'bin');
-    const commands = ['git-commit-assistant', 'ga'];
-
-    for (const cmd of commands) {
-      const cmdPath = path.join(binPath, cmd);
-      // Create the bin directory if it doesn't exist
-      if (!fs.existsSync(binPath)) {
-        fs.mkdirSync(binPath, { recursive: true });
+    // Only create global links if we're installing globally (not during development)
+    if (isGlobalInstall && !isDevelopment) {
+      // Get npm global bin directory
+      let npmGlobalPrefix;
+      try {
+        npmGlobalPrefix = execSync('npm config get prefix', {
+          encoding: 'utf8',
+        }).trim();
+      } catch (error) {
+        console.error('Failed to get npm global prefix:', error.message);
+        process.exit(1);
       }
 
-      // Create the command file
-      const cmdContent = `#!/usr/bin/env node
-require('${path.join(packageRoot, 'bin/git-commit-assistant')}');`;
+      // Create global command links
+      console.log('Creating global command links...');
+      const globalBinPath = isWindows
+        ? npmGlobalPrefix
+        : path.join(npmGlobalPrefix, 'bin');
+      const commands = ['git-commit-assistant', 'gcommit'];
 
-      fs.writeFileSync(cmdPath, cmdContent);
-      fs.chmodSync(cmdPath, '755'); // Make executable
+      for (const cmd of commands) {
+        const cmdPath = path.join(globalBinPath, cmd);
+        try {
+          fs.writeFileSync(
+            cmdPath,
+            '#!/usr/bin/env node\n' +
+              'require("git-commit-assistant/bin/git-commit-assistant");'
+          );
+          fs.chmodSync(cmdPath, '755'); // Make executable
+          console.log(`Created global command: ${cmd}`);
+        } catch (error) {
+          console.error(`Failed to create ${cmd} command:`, error.message);
+          process.exit(1);
+        }
+      }
     }
 
-    console.log('Installation completed successfully!');
+    console.log(
+      `Installation completed successfully in ${
+        isDevelopment ? 'development' : 'production'
+      } mode!`
+    );
   } catch (error) {
     console.error('Installation failed:', error.message);
     process.exit(1);

@@ -1,14 +1,16 @@
 {
   "name": "git-commit-assistant",
-  "version": "0.1.7",
+  "version": "0.1.9",
   "description": "AI-powered Git commit assistant using Gemini",
   "main": "bin/git-commit-assistant",
   "bin": {
     "git-commit-assistant": "./bin/git-commit-assistant",
-    "ga": "./bin/git-commit-assistant"
+    "gcommit": "./bin/git-commit-assistant"
   },
   "scripts": {
-    "postinstall": "node scripts/install.js"
+    "postinstall": "node scripts/install.js",
+    "dev": "npm unlink git-commit-assistant || true && npm link && echo 'Development mode activated - using local version'",
+    "prod": "npm unlink git-commit-assistant && npm install -g git-commit-assistant && echo 'Production mode activated - using published version'"
   },
   "repository": {
     "type": "git",

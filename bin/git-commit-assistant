@@ -5,7 +5,6 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const packageRoot = path.join(__dirname, '..');
 const venvPath = path.join(os.homedir(), '.git-commit-assistant-venv');
 const isWindows = process.platform === 'win32';
 
@@ -27,13 +26,10 @@ if (!fs.existsSync(pythonPath)) {
 // Execute the Python script
 const pythonProcess = spawn(
   pythonPath,
-  [
-    path.join(packageRoot, 'git_commit_assistant/main.py'),
-    ...process.argv.slice(2),
-  ],
+  ['-m', 'git_commit_assistant.main', ...process.argv.slice(2)],
   {
     stdio: 'inherit',
-    cwd: process.cwd(), // Preserve user's current working directory
+    cwd: process.cwd(),
   }
 );
 

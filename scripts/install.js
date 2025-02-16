@@ -37,12 +37,33 @@ async function main() {
 
     const isWindows = process.platform === 'win32';
     const binDir = isWindows ? 'Scripts' : 'bin';
+    const pythonPath = path.join(
+      venvPath,
+      binDir,
+      isWindows ? 'python.exe' : 'python3'
+    );
     const pipPath = path.join(venvPath, binDir, isWindows ? 'pip.exe' : 'pip');
 
     console.log('Installing Python package...');
+    await runCommand(pythonPath, ['-m', 'pip', 'install', '--upgrade', 'pip']);
+    await runCommand(pythonPath, [
+      '-m',
+      'pip',
+      'install',
+      '--upgrade',
+      'setuptools',
+      'wheel',
+    ]);
     await runCommand(
-      pipPath,
-      ['install', isDevelopment ? '-e' : '', packageRoot].filter(Boolean)
+      pythonPath,
+      [
+        '-m',
+        'pip',
+        'install',
+        isDevelopment ? '-e' : '',
+        packageRoot,
+        '--no-cache-dir',
+      ].filter(Boolean)
     );
 
     const pipConfigDir = path.join(venvPath, isWindows ? 'pip' : 'pip.conf');

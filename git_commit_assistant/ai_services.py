@@ -97,6 +97,11 @@ class AIService(ABC):
     def _parse_ai_response(self, content: str) -> Dict:
         """Parse AI response and ensure it's in the correct format."""
         try:
+            # Handle None content
+            if content is None:
+                print("Received empty response from AI service")
+                return self._get_default_response()
+                
             # Clean up the response
             content = content.strip()
             
@@ -134,7 +139,7 @@ class AIService(ABC):
             # Handle detailed_description
             detailed_desc = response.get('detailed_description', [])
             if isinstance(detailed_desc, str):
-                detailed_desc = [line.strip() for line in detailed_desc.split('\n') if line.strip()]
+                detailed_desc = [line.strip() for line in detailed_desc.split('\n') if line and line.strip()]
             
             if not detailed_desc:
                 print("Empty detailed_description")
@@ -153,7 +158,7 @@ class AIService(ABC):
             
             # Ensure other fields have default values if missing
             response['breaking_change'] = bool(response.get('breaking_change', False))
-            response['breaking_description'] = response.get('breaking_description', '').strip()
+            response['breaking_description'] = str(response.get('breaking_description', '')).strip()
             
             # Validate commit type against allowed types
             valid_types = [t[0] for t in self.COMMIT_TYPES]
@@ -162,7 +167,7 @@ class AIService(ABC):
                 response['type'] = 'chore'  # Fallback to most conservative type
             
             # Ensure description is lowercase and concise
-            response['description'] = response['description'].lower().strip()
+            response['description'] = str(response.get('description', '')).lower().strip()
             if len(response['description']) > 72:
                 response['description'] = response['description'][:69] + '...'
             
@@ -222,7 +227,11 @@ class OpenAIService(BaseAPIService):
         )
 
     def _extract_content(self, response_data: Dict) -> str:
-        return response_data["choices"][0]["message"]["content"]
+        try:
+            return response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        except (KeyError, IndexError):
+            print("Invalid response format from OpenAI")
+            return ""
 
 class DeepseekService(BaseAPIService):
     def __init__(self, api_key: str):
@@ -233,7 +242,11 @@ class DeepseekService(BaseAPIService):
         )
 
     def _extract_content(self, response_data: Dict) -> str:
-        return response_data["choices"][0]["message"]["content"]
+        try:
+            return response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        except (KeyError, IndexError):
+            print("Invalid response format from Deepseek")
+            return ""
 
 class ClaudeService(BaseAPIService):
     def __init__(self, api_key: str):
@@ -249,7 +262,11 @@ class ClaudeService(BaseAPIService):
         }
 
     def _extract_content(self, response_data: Dict) -> str:
-        return response_data["content"][0]["text"]
+        try:
+            return response_data.get("content", [{}])[0].get("text", "")
+        except (KeyError, IndexError):
+            print("Invalid response format from Claude")
+            return ""
 
 class GeminiService(AIService):
     def __init__(self, api_key: str):
@@ -293,8 +310,15 @@ class GeminiService(AIService):
                 print("Invalid response structure")
                 return self._get_default_response()
                 
-            content = candidate["content"]["parts"][0]["text"]
-            return self._parse_ai_response(content)
+            try:
+                content = candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
+                if not content:
+                    print("Empty content from Gemini API")
+                    return self._get_default_response()
+                return self._parse_ai_response(content)
+            except (KeyError, IndexError):
+                print("Invalid response format from Gemini")
+                return self._get_default_response()
                 
         except Exception as e:
             print(f"Error in Gemini service: {str(e)}")

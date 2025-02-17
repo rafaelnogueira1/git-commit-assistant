@@ -17,6 +17,7 @@ from pathlib import Path
 import questionary
 from .ai_services import GeminiService, OpenAIService, ClaudeService, DeepseekService
 import keyring
+from .project_analyzer import ProjectAnalyzer
 
 class CredentialsManager:
     """Secure credentials manager using system keyring."""
@@ -70,7 +71,7 @@ class GitCommitAssistant:
         self.original_cwd = os.getcwd()
         self.config = config
         
-        # Configuração do serviço de IA
+        # AI service configuration
         service_name = config.get('service', 'gemini').lower()
         service_map = {
             'gemini': (GeminiService, 'GEMINI_API_KEY'),
@@ -100,6 +101,10 @@ class GitCommitAssistant:
             
             # Initialize repo without changing directory
             self.repo = Repo(git_dir, search_parent_directories=True)
+            
+            # Initialize project analyzer
+            self.project_analyzer = ProjectAnalyzer()
+            self.project_context = self.project_analyzer.analyze_project_structure(git_dir)
             
             # Validate git repository state
             if not self._has_commits():
@@ -214,13 +219,21 @@ class GitCommitAssistant:
     def select_commit_type(self, suggested_type: str) -> Tuple[str, bool]:
         """Interactive commit type selection."""
         try:
+            config = self.project_context.get('config', {})
+            commit_types = config.get('commitTypes', self.COMMIT_TYPES)
+            
+            # Convert config format to internal format if needed
+            if isinstance(commit_types[0], dict):
+                commit_types = [(f"{self.COMMIT_TYPES[i][0].split()[0]} {ct['type']}", ct['description']) 
+                              for i, ct in enumerate(commit_types) if i < len(self.COMMIT_TYPES)]
+            
             table = Table(title="Commit Types", show_header=True)
             table.add_column("#", style="cyan")
             table.add_column("Type", style="green")
             table.add_column("Description", style="yellow")
 
-            for i, (type_emoji, desc) in enumerate(self.COMMIT_TYPES, 1):
-                type_name = type_emoji.split()[1]
+            for i, (type_emoji, desc) in enumerate(commit_types, 1):
+                type_name = type_emoji.split()[-1]  # Get last part after emoji
                 if type_name == suggested_type:
                     table.add_row(str(i), f"[bold green]{type_emoji}[/bold green]", desc + " (suggested)")
                 else:
@@ -229,8 +242,8 @@ class GitCommitAssistant:
             self.console.print(table)
             
             default_choice = 1
-            for i, (type_emoji, _) in enumerate(self.COMMIT_TYPES, 1):
-                if type_emoji.split()[1] == suggested_type:
+            for i, (type_emoji, _) in enumerate(commit_types, 1):
+                if type_emoji.split()[-1] == suggested_type:
                     default_choice = i
                     break
             
@@ -239,7 +252,7 @@ class GitCommitAssistant:
                 default=default_choice
             )
             
-            selected_type = self.COMMIT_TYPES[choice-1][0].split()[1]
+            selected_type = commit_types[choice-1][0].split()[-1]  # Get type without emoji
             is_breaking = Confirm.ask("Is this a breaking change?", default=False)
             
             return selected_type, is_breaking
@@ -250,148 +263,133 @@ class GitCommitAssistant:
     def select_scope(self) -> str:
         """Interactive scope selection."""
         try:
+            config = self.project_context.get('config', {})
+            scopes = config.get('scopes', self.SCOPES)
+            
             table = Table(title="Available Scopes", show_header=True)
             table.add_column("#", style="cyan")
             table.add_column("Scope", style="green")
+            table.add_column("Description", style="yellow")
             
-            for i, scope in enumerate(self.SCOPES, 1):
-                table.add_row(str(i), scope)
+            suggested_scope = self.current_suggestion.get('scope', 'core').lower() if hasattr(self, 'current_suggestion') else 'core'
+            
+            for i, scope in enumerate(scopes, 1):
+                description = "(suggested)" if scope == suggested_scope else ""
+                table.add_row(str(i), f"[{'bold green' if scope == suggested_scope else 'green'}]{scope}[/{'bold green' if scope == suggested_scope else 'green'}]", description)
                 
             self.console.print(table)
             
-            choice = IntPrompt.ask("Select scope", default=1)
-            return self.SCOPES[choice-1]
+            default_choice = 1
+            for i, scope in enumerate(scopes, 1):
+                if scope == suggested_scope:
+                    default_choice = i
+                    break
+            
+            choice = IntPrompt.ask("Select scope", default=default_choice)
+            return scopes[choice-1]
         except KeyboardInterrupt:
             self.console.print("\n[yellow]Operation cancelled by user[/yellow]")
             sys.exit(0)
 
     def get_commit_details(self, files_changed: str, diff_content: str, force: bool = False) -> Dict:
-        """Get commit details from Gemini API or manual input."""
+        """Get commit details from AI service or manual input."""
         # First get AI suggestion
-        suggestion = self.analyze_changes(diff_content, files_changed)
+        self.current_suggestion = self.analyze_changes(diff_content, files_changed)
         
         # Format suggestion for display
-        emoji = next((t[0].split()[0] for t in self.COMMIT_TYPES if t[0].split()[1] == suggestion.get('type', 'feat')), "")
-        scope = suggestion.get('scope', 'core')
-        scope = scope.lower() if scope else 'core'
-        formatted_suggestion = f"{emoji} {suggestion.get('type', 'feat')}({scope}): {suggestion.get('description', '').lower()}"
+        config = self.project_context.get('config', {})
+        commit_types = config.get('commitTypes', self.COMMIT_TYPES)
         
-        if suggestion.get('detailed_description'):
+        # Get emoji for commit type
+        emoji = next((t[0].split()[0] for t in self.COMMIT_TYPES if t[0].split()[1] == self.current_suggestion.get('type', 'feat')), "🔄")
+        
+        scope = self.current_suggestion.get('scope', 'core')
+        scope = scope.lower() if scope else 'core'
+        formatted_suggestion = f"{emoji} {self.current_suggestion.get('type', 'feat')}({scope}): {self.current_suggestion.get('description', '').lower()}"
+        
+        if self.current_suggestion.get('detailed_description'):
             detailed_lines = []
-            if isinstance(suggestion['detailed_description'], list):
-                detailed_lines = [line.strip().strip("'\"").lower() for line in suggestion['detailed_description']]
+            if isinstance(self.current_suggestion['detailed_description'], list):
+                detailed_lines = self.current_suggestion['detailed_description']
             else:
-                detailed_lines = [line.strip().strip("'\"").lower() for line in suggestion['detailed_description'].split('\n')]
-            formatted_suggestion += f"\n\n{'\n'.join(detailed_lines)}"
+                detailed_lines = self.current_suggestion['detailed_description'].split('\n')
             
-        if suggestion.get('breaking_change'):
-            formatted_suggestion += f"\n\nBREAKING CHANGE: {suggestion.get('breaking_description', '').lower()}"
+            # Ensure each line starts with "- " and is properly formatted
+            formatted_lines = []
+            for line in detailed_lines:
+                line = line.strip().strip("'\"").lower()
+                if line:
+                    if not line.startswith("- "):
+                        line = f"- {line}"
+                    formatted_lines.append(line)
+            
+            if formatted_lines:
+                formatted_suggestion += f"\n\n{'\n'.join(formatted_lines)}"
+            
+        if self.current_suggestion.get('breaking_change'):
+            formatted_suggestion += f"\n\nBREAKING CHANGE: {self.current_suggestion.get('breaking_description', '').lower()}"
         
         # Show the suggestion
         self.console.print("\n[bold blue]AI Suggestion:[/bold blue]")
-        self.console.print(Panel(formatted_suggestion, title="AI Suggestion"))
+        self.console.print(Panel(formatted_suggestion, title="Suggested Commit Message", border_style="blue"))
         
         if force:
             return {
-                'type': suggestion.get('type', 'feat'),
-                'scope': suggestion.get('scope', 'core'),
-                'description': suggestion.get('description', '').lower(),
-                'detailed_description': suggestion.get('detailed_description', ''),
-                'breaking_change': suggestion.get('breaking_change', False),
-                'breaking_description': suggestion.get('breaking_description', '')
+                'type': self.current_suggestion.get('type', 'feat'),
+                'scope': self.current_suggestion.get('scope', 'core'),
+                'description': self.current_suggestion.get('description', '').lower(),
+                'detailed_description': formatted_lines if self.current_suggestion.get('detailed_description') else [],
+                'breaking_change': self.current_suggestion.get('breaking_change', False),
+                'breaking_description': self.current_suggestion.get('breaking_description', '')
             }
 
         # Let user choose type and scope
-        commit_type, is_breaking = self.select_commit_type(suggestion.get('type', 'feat'))
+        commit_type, is_breaking = self.select_commit_type(self.current_suggestion.get('type', 'feat'))
         scope = self.select_scope()
         
         return {
             'type': commit_type,
             'scope': scope,
-            'description': suggestion.get('description', '').lower(),
-            'detailed_description': suggestion.get('detailed_description', ''),
+            'description': self.current_suggestion.get('description', '').lower(),
+            'detailed_description': formatted_lines if self.current_suggestion.get('detailed_description') else [],
             'breaking_change': is_breaking,
-            'breaking_description': suggestion.get('breaking_description', '') if is_breaking else ''
+            'breaking_description': self.current_suggestion.get('breaking_description', '') if is_breaking else ''
         }
 
     def analyze_changes(self, diff_content: str, files_changed: str) -> Dict:
-        """Analyze changes using Gemini API."""
-        prompt = f"""You are a Git commit message analyzer. Analyze the following Git changes and provide a structured response.
-        Focus on understanding the changes and suggesting appropriate commit details.
-
-        Files changed:
-        {files_changed}
-        
-        Diff content:
-        {diff_content}
-        
-        Based on the changes, determine:
-        1. Commit type (choose one): feat, fix, docs, style, refactor, perf, test, chore, ci
-        2. Most appropriate scope from: core, ui, api, data, auth, config, test, docs
-        3. A clear and concise description (max 72 chars)
-        4. A detailed description explaining the changes (start each item with '- ')
-        5. Whether this is a breaking change
-        
-        Provide your response in this exact JSON format:
-        {{
-            "type": "commit_type",
-            "scope": "affected_scope",
-            "description": "short_description",
-            "detailed_description": "detailed_changes",
-            "breaking_change": boolean,
-            "breaking_description": "description if breaking"
-        }}
-
-        Important: Return ONLY the JSON object, no other text or explanation.
-        Make sure the JSON is valid and properly formatted.
-        Ensure each line in detailed_description starts with '- '.
-        """
+        """Analyze changes using AI service with project context."""
+        prompt = self.project_analyzer.generate_adaptive_prompt(
+            self.project_context,
+            diff_content,
+            files_changed
+        )
 
         try:
             self.console.print("[cyan]Analyzing changes with AI...[/cyan]")
-            response = requests.post(
-                f"{self.ai_service.api_url}?key={self.ai_service.api_key}",
-                headers=self.ai_service.headers,
-                json={
-                    "contents": [{
-                        "parts": [{
-                            "text": prompt
-                        }]
-                    }],
-                    "generationConfig": {
-                        "temperature": 0.3,
-                        "topK": 1,
-                        "topP": 0.8,
-                    }
-                }
-            )
+            response = self.ai_service.analyze_changes(diff_content, files_changed)
             
-            response.raise_for_status()
-            content = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+            if not response or not isinstance(response, dict):
+                self.console.print("[yellow]Warning: Invalid response from AI service[/yellow]")
+                return self._get_default_commit_details()
             
-            # Clean up the response and try to parse it
-            content = content.strip()
-            if content.startswith("```json"):
-                content = content[7:]
-            if content.endswith("```"):
-                content = content[:-3]
+            # Ensure all required fields are present
+            required_fields = ['type', 'scope', 'description', 'detailed_description', 'breaking_change', 'breaking_description']
+            if not all(field in response for field in required_fields):
+                self.console.print("[yellow]Warning: Missing required fields in AI response[/yellow]")
+                return self._get_default_commit_details()
+            
+            return response
                 
-            try:
-                import json
-                return json.loads(content)
-            except json.JSONDecodeError as e:
-                self.console.print(f"[yellow]Warning: Failed to parse AI response as JSON: {str(e)}[/yellow]")
-                
-        except requests.exceptions.RequestException as e:
-            self.console.print(f"[red]API Error: {str(e)}[/red]")
         except Exception as e:
-            self.console.print(f"[red]Unexpected error: {str(e)}[/red]")
-        
-        # Return default values if anything fails
+            self.console.print(f"[red]Error analyzing changes: {str(e)}[/red]")
+            return self._get_default_commit_details()
+    
+    def _get_default_commit_details(self) -> Dict:
+        """Get default commit details when AI analysis fails."""
         return {
             'type': 'feat',
             'scope': 'core',
-            'description': '',
+            'description': 'update code',
             'detailed_description': '',
             'breaking_change': False,
             'breaking_description': ''
@@ -432,18 +430,21 @@ class GitCommitAssistant:
             
             # Handle both string and list inputs
             if isinstance(details['detailed_description'], list):
-                lines = details['detailed_description']
+                detailed_lines = details['detailed_description']
             else:
-                lines = details['detailed_description'].split('\n')
-                
-            for line in lines:
-                if line.strip():
-                    line = line.strip().lower()
-                    if not line.startswith('-'):
-                        line = f"- {line}"
-                    detailed_lines.append(line)
+                detailed_lines = details['detailed_description'].split('\n')
             
-            message += f"\n\n{'\n'.join(detailed_lines)}"
+            # Ensure each line starts with "- " and is properly formatted
+            formatted_lines = []
+            for line in detailed_lines:
+                line = line.strip().strip("'\"").lower()
+                if line:
+                    if not line.startswith("- "):
+                        line = f"- {line}"
+                    formatted_lines.append(line)
+            
+            if formatted_lines:
+                message += f"\n\n{'\n'.join(formatted_lines)}"
         
         if details['breaking_change']:
             breaking_desc = details.get('breaking_description', '')
@@ -643,73 +644,74 @@ def main():
         # Show final message and confirm
         message = assistant.format_commit_message(details)
         console = Console()
-        console.print("\n[bold blue]Final Commit Message:[/bold blue]")
-        console.print(Panel(message, title="Commit Message"))
+        console.print("\n[bold blue]AI Suggested Commit Message:[/bold blue]")
+        console.print(Panel(message, title="Suggested Commit Message", border_style="blue"))
 
-        # Show available actions
-        action_table = Table(show_header=True, header_style="bold magenta")
-        action_table.add_column("Action", style="cyan")
-        action_table.add_column("Description", style="yellow")
-        
-        action_table.add_row("accept", "Proceed with the commit")
-        action_table.add_row("edit", "Modify the commit message")
-        action_table.add_row("cancel", "Abort the commit")
-        
-        console.print("\n[bold blue]Available Actions:[/bold blue]")
-        console.print(action_table)
+        if not args.force:
+            # Show available actions
+            action_table = Table(show_header=True, header_style="bold magenta")
+            action_table.add_column("Action", style="cyan")
+            action_table.add_column("Description", style="yellow")
+            
+            action_table.add_row("accept", "Proceed with the commit")
+            action_table.add_row("edit", "Modify the commit message")
+            action_table.add_row("cancel", "Abort the commit")
+            
+            console.print("\n[bold blue]Available Actions:[/bold blue]")
+            console.print(action_table)
 
-        # Interactive selection with arrow keys
-        action = questionary.select(
-            "What would you like to do?",
-            choices=[
-                "accept - Proceed with the commit",
-                "edit - Modify the commit message",
-                "cancel - Abort the commit"
-            ],
-            default="accept - Proceed with the commit"
-        ).ask()
+            # Interactive selection with arrow keys
+            action = questionary.select(
+                "What would you like to do?",
+                choices=[
+                    "accept - Proceed with the commit",
+                    "edit - Modify the commit message",
+                    "cancel - Abort the commit"
+                ],
+                default="accept - Proceed with the commit"
+            ).ask()
 
-        if not action or action.startswith("cancel"):
-            sys.exit(0)
-        elif action.startswith("edit"):
-            # Create a temporary file with the commit message
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp:
-                tmp.write(message)
-                tmp_path = tmp.name
+            if not action or action.startswith("cancel"):
+                sys.exit(0)
+            elif action.startswith("edit"):
+                # Create a temporary file with the commit message
+                import tempfile
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp:
+                    tmp.write(message)
+                    tmp_path = tmp.name
 
-            # Get git editor from config or default to vim
-            try:
-                editor = subprocess.check_output(
-                    ["git", "config", "--get", "core.editor"],
-                    universal_newlines=True
-                ).strip()
-            except subprocess.CalledProcessError:
-                editor = os.getenv('EDITOR', 'vim')
+                # Get git editor from config or default to vim
+                try:
+                    editor = subprocess.check_output(
+                        ["git", "config", "--get", "core.editor"],
+                        universal_newlines=True
+                    ).strip()
+                except subprocess.CalledProcessError:
+                    editor = os.getenv('EDITOR', 'vim')
 
-            # Open editor with the temporary file
-            try:
-                subprocess.call([editor, tmp_path])
-                
-                # Read the edited message
-                with open(tmp_path, 'r') as tmp:
-                    message = tmp.read().strip()
-                
-                # Remove temporary file
-                os.unlink(tmp_path)
-                
-                # Show the final edited message
-                console.print("\n[bold blue]Final Edited Message:[/bold blue]")
-                console.print(Panel(message, title="Edited Commit Message"))
-                
-                # Confirm the edited message
-                if not Confirm.ask("Proceed with this edited message?", default=True):
-                    sys.exit(0)
+                # Open editor with the temporary file
+                try:
+                    subprocess.call([editor, tmp_path])
                     
-            except Exception as e:
-                console.print(f"[red]Error editing message: {str(e)}[/red]")
-                os.unlink(tmp_path)
-                sys.exit(1)
+                    # Read the edited message
+                    with open(tmp_path, 'r') as tmp:
+                        message = tmp.read().strip()
+                    
+                    # Remove temporary file
+                    os.unlink(tmp_path)
+                    
+                    # Show the final edited message
+                    console.print("\n[bold blue]Final Edited Message:[/bold blue]")
+                    console.print(Panel(message, title="Edited Commit Message"))
+                    
+                    # Confirm the edited message
+                    if not Confirm.ask("Proceed with this edited message?", default=True):
+                        sys.exit(0)
+                    
+                except Exception as e:
+                    console.print(f"[red]Error editing message: {str(e)}[/red]")
+                    os.unlink(tmp_path)
+                    sys.exit(1)
 
         # Commit and push
         assistant.commit_changes(message, args.push)

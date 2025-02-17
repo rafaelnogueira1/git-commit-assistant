@@ -89,7 +89,7 @@ class TestGitCommitAssistant(unittest.TestCase):
         feature = self.repo.create_head("feature")
         self.repo.head.reference = feature
         
-        self.assistant.validate_branch()  # Não deve levantar exceção
+        self.assistant.validate_branch()  # Should not raise exception
 
     def test_validate_branch_protected_rejected(self):
         master = self.repo.create_head("master")

@@ -1,0 +1,54 @@
+{
+  "scopes": ["core", "ui", "api", "data", "config", "test", "docs"],
+  "commitTypes": [
+    {
+      "type": "feat",
+      "description": "New feature or enhancement"
+    },
+    {
+      "type": "fix",
+      "description": "Bug fix"
+    },
+    {
+      "type": "docs",
+      "description": "Documentation changes"
+    },
+    {
+      "type": "style",
+      "description": "Code style/formatting changes"
+    },
+    {
+      "type": "refactor",
+      "description": "Code refactoring"
+    },
+    {
+      "type": "perf",
+      "description": "Performance improvements"
+    },
+    {
+      "type": "test",
+      "description": "Adding or updating tests"
+    },
+    {
+      "type": "chore",
+      "description": "Maintenance tasks"
+    },
+    {
+      "type": "ci",
+      "description": "CI/CD changes"
+    }
+  ],
+  "breakingPatterns": [
+    "BREAKING CHANGE:",
+    "BREAKING-CHANGE:",
+    "BREAKING CHANGES:",
+    "API:",
+    "DEPRECATED:"
+  ],
+  "conventionalCommits": true,
+  "maxLineLength": 72,
+  "requireScope": true,
+  "requireDescription": true,
+  "allowCustomTypes": false,
+  "allowCustomScopes": true
+}

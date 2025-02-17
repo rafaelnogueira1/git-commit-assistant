@@ -11,6 +11,8 @@ AI-powered Git commit assistant that helps you write better commit messages usin
 - 🔒 Protected branch validation
 - 🚀 Optional automatic push
 - 🔐 Secure API key storage using system keyring
+- 🎯 Project-specific configuration
+- 🧠 Automatic project context detection
 
 ## Installation
 
@@ -81,6 +83,41 @@ gcommit -s openai   # or gemini, claude, deepseek
 export AI_SERVICE='openai'  # or gemini, claude, deepseek
 ```
 
+## Project Configuration
+
+You can customize the commit assistant for specific projects by creating a `.commitrc.json` file in your project root:
+
+```json
+{
+  "scopes": ["frontend", "backend", "database", "auth", "api"],
+  "commitTypes": [
+    {
+      "type": "feat",
+      "description": "New feature"
+    },
+    {
+      "type": "fix",
+      "description": "Bug fix"
+    }
+  ],
+  "breakingPatterns": ["BREAKING CHANGE:", "API:", "DEPRECATED:"],
+  "conventionalCommits": true,
+  "maxLineLength": 72,
+  "requireScope": true,
+  "requireDescription": true,
+  "allowCustomTypes": false,
+  "allowCustomScopes": true
+}
+```
+
+The assistant will automatically:
+
+- Detect your project's primary language
+- Identify frameworks and tools used
+- Adapt commit types and scopes to your project
+- Follow your project's commit conventions
+- Suggest relevant scopes based on your project structure
+
 ## Usage
 
 Instead of `git commit`, you can use either:
@@ -108,9 +145,9 @@ gcommit -a -s claude # Stage all and use Claude
 
 The assistant will:
 
-1. Show your staged/unstaged changes
-2. Analyze the changes using the selected AI service
-3. Suggest a commit message following conventional commits
+1. Analyze your project structure
+2. Show your staged/unstaged changes
+3. Generate context-aware commit messages
 4. Let you edit or accept the message
 5. Create the commit (and push if requested)
 

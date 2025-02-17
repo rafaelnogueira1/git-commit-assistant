@@ -15,7 +15,7 @@ class TestAIServices(unittest.TestCase):
             "type": "feat",
             "scope": "core",
             "description": "test commit",
-            "detailed_description": "- Added test feature",
+            "detailed_description": ["- Added test feature"],
             "breaking_change": False,
             "breaking_description": ""
         }

@@ -1,10 +1,10 @@
 # Git Commit Assistant
 
-AI-powered Git commit assistant that helps you write better commit messages using Google's Gemini AI.
+AI-powered Git commit assistant that helps you write better commit messages using multiple AI services.
 
 ## Features
 
-- 🤖 AI-powered commit message suggestions
+- 🤖 Multiple AI services support (Gemini, GPT-4, Claude, Deepseek)
 - 📝 Conventional commits format with emojis
 - 🔍 Smart analysis of your changes
 - 🎨 Beautiful CLI interface
@@ -47,11 +47,30 @@ pip3 install git-commit-assistant
 
 ## Setup
 
-1. Get your Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Set your API key:
+1. Choose your preferred AI service and get the API key:
+
+   - [Google AI Studio](https://makersuite.google.com/app/apikey) for Gemini (default)
+   - [OpenAI](https://platform.openai.com/api-keys) for GPT-4
+   - [Anthropic](https://console.anthropic.com/account/keys) for Claude
+   - [Deepseek](https://platform.deepseek.com/) for Deepseek
+
+2. Set up your environment:
 
 ```bash
+# For Gemini (default)
 export GEMINI_API_KEY='your-api-key'
+
+# For OpenAI
+export OPENAI_API_KEY='your-api-key'
+export AI_SERVICE='openai'
+
+# For Claude
+export ANTHROPIC_API_KEY='your-api-key'
+export AI_SERVICE='claude'
+
+# For Deepseek
+export DEEPSEEK_API_KEY='your-api-key'
+export AI_SERVICE='deepseek'
 ```
 
 ## Usage
@@ -69,16 +88,18 @@ Available options:
 gcommit -a          # Stage all changes
 gcommit -p          # Push after commit
 gcommit -f          # Skip confirmations
+gcommit -s openai   # Use OpenAI service (or claude, deepseek)
 
 # Combine options
 gcommit -a -p       # Stage all changes and push
 gcommit -a -p -f    # Stage all, push, and skip confirmations
+gcommit -a -s claude # Stage all and use Claude
 ```
 
 The assistant will:
 
 1. Show your staged/unstaged changes
-2. Analyze the changes using AI
+2. Analyze the changes using the selected AI service
 3. Suggest a commit message following conventional commits
 4. Let you edit or accept the message
 5. Create the commit (and push if requested)

@@ -15,6 +15,7 @@ from git import Repo
 from git.exc import InvalidGitRepositoryError
 from pathlib import Path
 import questionary
+from .ai_services import GeminiService, OpenAIService, ClaudeService, DeepseekService
 
 class GitCommitAssistant:
     COMMIT_TYPES = [
@@ -40,10 +41,33 @@ class GitCommitAssistant:
         "docs"       # Documentation
     ]
 
-    def __init__(self, api_key: str):
-        self.api_key = api_key
+    def __init__(self, config: Dict[str, str]):
         self.console = Console()
         self.original_cwd = os.getcwd()
+        self.config = config
+        
+        # Configuração do serviço de IA
+        service_name = config.get('service', 'gemini').lower()
+        service_map = {
+            'gemini': (GeminiService, 'GEMINI_API_KEY'),
+            'openai': (OpenAIService, 'OPENAI_API_KEY'),
+            'claude': (ClaudeService, 'ANTHROPIC_API_KEY'),
+            'deepseek': (DeepseekService, 'DEEPSEEK_API_KEY')
+        }
+        
+        if service_name not in service_map:
+            self.console.print(f"[red]Error: Unsupported AI service: {service_name}[/red]")
+            self.console.print("[yellow]Supported services: " + ", ".join(service_map.keys()) + "[/yellow]")
+            sys.exit(1)
+        
+        ServiceClass, key_name = service_map[service_name]
+        api_key = config.get('api_key')
+        if not api_key:
+            self.console.print(f"[red]Error: Missing API key for {service_name}[/red]")
+            self.console.print(f"[yellow]Please set it using: export {key_name}='your-api-key'[/yellow]")
+            sys.exit(1)
+        
+        self.ai_service = ServiceClass(api_key)
         
         try:
             git_dir = self._find_git_root()
@@ -60,11 +84,6 @@ class GitCommitAssistant:
         except InvalidGitRepositoryError as e:
             self.console.print(f"[red]Error: {str(e)}[/red]")
             sys.exit(1)
-
-        self.api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
-        self.headers = {
-            "Content-Type": "application/json"
-        }
 
     def _find_git_root(self) -> Optional[str]:
         """Find the git repository root from the current directory."""
@@ -307,8 +326,8 @@ class GitCommitAssistant:
         try:
             self.console.print("[cyan]Analyzing changes with AI...[/cyan]")
             response = requests.post(
-                f"{self.api_url}?key={self.api_key}",
-                headers=self.headers,
+                f"{self.ai_service.api_url}?key={self.ai_service.api_key}",
+                headers=self.ai_service.headers,
                 json={
                     "contents": [{
                         "parts": [{
@@ -451,17 +470,18 @@ def main():
         parser.add_argument("-a", "--add", action="store_true", help="Stage all changes")
         parser.add_argument("-f", "--force", action="store_true", help="Skip intermediate confirmations")
         parser.add_argument("-p", "--push", action="store_true", help="Push after commit")
+        parser.add_argument("-s", "--service", choices=['gemini', 'openai', 'claude', 'deepseek'], 
+                          default=os.getenv('AI_SERVICE', 'gemini'),
+                          help="AI service to use (default: gemini)")
         args = parser.parse_args()
 
-        # Get API key from environment
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            console = Console()
-            console.print("[red]Error: GEMINI_API_KEY environment variable not set[/red]")
-            console.print("[yellow]Please set it using: export GEMINI_API_KEY='your-api-key'[/yellow]")
-            sys.exit(1)
+        # Get API keys from environment
+        config = {
+            'service': args.service,
+            'api_key': os.getenv(f"{args.service.upper()}_API_KEY")
+        }
 
-        assistant = GitCommitAssistant(api_key)
+        assistant = GitCommitAssistant(config)
 
         # Stage all changes if requested
         if args.add:

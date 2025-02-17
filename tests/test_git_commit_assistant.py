@@ -21,7 +21,7 @@ class TestGitCommitAssistant(unittest.TestCase):
         self.repo.index.add(["test.txt"])
         self.repo.index.commit("Initial commit")
         
-        self.assistant = GitCommitAssistant(self.api_key)
+        self.assistant = GitCommitAssistant({"service": "gemini", "api_key": self.api_key})
         self.assistant.repo = self.repo
 
     def tearDown(self):
@@ -31,9 +31,10 @@ class TestGitCommitAssistant(unittest.TestCase):
         shutil.rmtree(self.temp_dir)
 
     def test_init_with_valid_repo(self):
-        assistant = GitCommitAssistant(self.api_key)
+        config = {"service": "gemini", "api_key": self.api_key}
+        assistant = GitCommitAssistant(config)
         self.assertIsNotNone(assistant.repo)
-        self.assertEqual(assistant.api_key, self.api_key)
+        self.assertEqual(assistant.config, config)
 
     def test_init_with_invalid_repo(self):
         invalid_dir = tempfile.mkdtemp()
@@ -42,7 +43,7 @@ class TestGitCommitAssistant(unittest.TestCase):
             with patch("git_commit_assistant.main.Repo") as mock_repo:
                 mock_repo.side_effect = InvalidGitRepositoryError()
                 with self.assertRaises(SystemExit):
-                    GitCommitAssistant(self.api_key)
+                    GitCommitAssistant({"service": "gemini", "api_key": self.api_key})
         finally:
             os.chdir(self.temp_dir)
             import shutil
@@ -252,7 +253,7 @@ class TestGitCommitAssistant(unittest.TestCase):
         os.chdir(invalid_dir)
         try:
             with patch("sys.exit") as mock_exit:
-                assistant = GitCommitAssistant(self.api_key)
+                assistant = GitCommitAssistant({"service": "gemini", "api_key": self.api_key})
                 mock_exit.assert_called_once_with(1)
         finally:
             os.chdir(self.temp_dir)

@@ -2,13 +2,15 @@ from setuptools import setup, find_packages
 
 setup(
     name="git-commit-assistant",
-    version="0.1.0",
+    version="1.1.0",
     packages=find_packages(),
     install_requires=[
-        "requests",
-        "rich",
-        "gitpython",
-        "questionary"
+        "requests>=2.31.0",
+        "rich>=13.7.0",
+        "gitpython>=3.1.40",
+        "questionary>=2.0.1",
+        "openai>=1.12.0",
+        "anthropic>=0.18.1",
     ],
     entry_points={
         "console_scripts": [
@@ -17,10 +19,10 @@ setup(
         ],
     },
     author="Rafael Nogueira",
-    description="AI-powered Git commit assistant using Gemini",
+    description="AI-powered Git commit assistant using multiple AI services",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/git-commit-assistant",
+    url="https://github.com/rafaelnogueira1/git-commit-assistant",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

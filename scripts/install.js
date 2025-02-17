@@ -20,6 +20,30 @@ function runCommand(command, args, options = {}) {
   });
 }
 
+function checkEnvVars() {
+  const services = {
+    gemini: 'GEMINI_API_KEY',
+    openai: 'OPENAI_API_KEY',
+    claude: 'ANTHROPIC_API_KEY',
+    deepseek: 'DEEPSEEK_API_KEY',
+  };
+
+  const service = process.env.AI_SERVICE || 'gemini';
+  if (!services[service]) {
+    console.error(`Invalid AI service: ${service}`);
+    console.error('Valid options: ' + Object.keys(services).join(', '));
+    process.exit(1);
+  }
+
+  const keyVar = services[service];
+  if (!process.env[keyVar]) {
+    console.warn(`Warning: ${keyVar} environment variable not set`);
+    console.warn(
+      `You will need to set it using: export ${keyVar}='your-api-key'`
+    );
+  }
+}
+
 async function main() {
   try {
     const isGlobalInstall = process.env.npm_config_global === 'true';
@@ -29,6 +53,9 @@ async function main() {
     console.log(
       `Installing in ${isDevelopment ? 'development' : 'production'} mode...`
     );
+
+    // Check environment variables
+    checkEnvVars();
 
     if (!fs.existsSync(venvPath)) {
       console.log('Creating virtual environment...');

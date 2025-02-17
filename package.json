@@ -1,6 +1,6 @@
 {
   "name": "git-commit-assistant",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "AI-powered Git commit assistant using Gemini",
   "main": "bin/git-commit-assistant",
   "bin": {

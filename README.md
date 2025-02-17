@@ -14,6 +14,8 @@ AI-powered Git commit assistant that helps you write better commit messages usin
 - 🎯 Project-specific configuration
 - 🧠 Automatic project context detection
 
+![git-commit-assistant](https://github.com/user-attachments/assets/e4baed1c-ceb6-4a74-869d-33f8cfa469ee)
+
 ## Installation
 
 ### Via NPM (Recommended)

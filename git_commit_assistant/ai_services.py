@@ -16,9 +16,9 @@ class AIService(ABC):
         ("ci", "CI changes")
     ]
 
-    PROMPT_TEMPLATE = """You are a Git commit message analyzer. Analyze the following Git changes and provide a structured response.
+    PROMPT_TEMPLATE = """You are a Git commit message analyzer. Your task is to analyze ONLY the following Git changes and provide a structured response.
 
-        Your task is to create a detailed and meaningful commit message that clearly explains both WHAT changed and WHY.
+        IMPORTANT: Focus ONLY on the actual changes shown in the diff content. DO NOT make assumptions about changes that are not explicitly shown.
 
         Files changed:
         {files_changed}
@@ -26,19 +26,35 @@ class AIService(ABC):
         Diff content:
         {diff_content}
         
-        Based on the changes, determine:
+        Based on ONLY the changes shown above, determine:
         1. Commit type (choose one): {commit_types}
+           - Choose the most specific type that matches the actual changes
+           - If only documentation was changed, use 'docs'
+           - If only comments or non-functional text was changed, use 'docs'
+           - Use 'feat' only if new functionality was added
+           - Use 'fix' only if a bug was fixed
+           
         2. Most appropriate scope from: core, ui, api, data, auth, config, test, docs
+           - Choose the scope that best matches the files that were actually changed
+           - Use 'docs' for documentation-only changes
+           - Use the most specific scope possible
+           
         3. A clear and concise description (max 72 chars) that explains WHAT changed
-        4. A detailed description explaining WHY the changes were made and their impact
+           - Describe only the actual changes shown in the diff
+           - Be specific about what was modified
+           - Do not include changes that are not shown in the diff
+           
+        4. A detailed description explaining the changes and their impact
            - Each line must start with "- "
-           - Include technical details when relevant
-           - Explain the reasoning behind the changes
-           - List all significant modifications
-           - Describe the impact and benefits of the changes
-           - Include any important implementation details
-           - Aim for at least 3-4 detail lines
+           - Focus only on changes visible in the diff
+           - Include specific details about what was modified
+           - Explain the purpose of the actual changes
+           - Do not make assumptions about changes not shown
+           - Reference specific parts of the changes when possible
+           
         5. Whether this is a breaking change (changes that break backward compatibility)
+           - Mark as breaking only if the changes would break existing functionality
+           - Consider only the changes shown in the diff
         
         Provide your response in this exact JSON format:
         {{
@@ -48,24 +64,23 @@ class AIService(ABC):
             "detailed_description": [
                 "- first detail about why and impact",
                 "- second detail about why and impact",
-                "- technical details if relevant",
-                "- other important information"
+                "- technical details if relevant"
             ],
             "breaking_change": boolean,
             "breaking_description": "if breaking_change is true, explain why"
         }}
 
-        Important:
+        Important rules:
         - Return ONLY the JSON object, no other text or markdown formatting
-        - The description must be meaningful and specific
+        - The description must be meaningful and specific to the actual changes
         - The detailed_description MUST be a list of strings
         - Each detail line MUST start with "- "
-        - Include at least 3-4 detail lines
-        - Focus on both the technical changes and their impact
+        - Include at least 2-3 detail lines about the actual changes
+        - Focus ONLY on the changes shown in the diff
         - For the "type" field, use ONLY the type name without emoji
-        - Ensure each detail line provides meaningful information
-        - Avoid generic descriptions
-        - Include specific technical details when relevant"""
+        - DO NOT make assumptions about changes not shown in the diff
+        - BE SPECIFIC about what actually changed
+        - If only documentation was changed, reflect that in the type and scope"""
 
     @abstractmethod
     def analyze_changes(self, diff_content: str, files_changed: str) -> Dict:

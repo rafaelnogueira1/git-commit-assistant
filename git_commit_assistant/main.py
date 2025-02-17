@@ -372,11 +372,30 @@ class GitCommitAssistant:
                 self.console.print("[yellow]Warning: Invalid response from AI service[/yellow]")
                 return self._get_default_commit_details()
             
-            # Ensure all required fields are present
-            required_fields = ['type', 'scope', 'description', 'detailed_description', 'breaking_change', 'breaking_description']
-            if not all(field in response for field in required_fields):
+            # Ensure all required fields are present and valid
+            if not response.get('type') or not response.get('scope') or not response.get('description'):
                 self.console.print("[yellow]Warning: Missing required fields in AI response[/yellow]")
                 return self._get_default_commit_details()
+            
+            # Ensure detailed_description is a non-empty list
+            if not response.get('detailed_description') or not isinstance(response['detailed_description'], list):
+                self.console.print("[yellow]Warning: Invalid detailed_description in AI response[/yellow]")
+                return self._get_default_commit_details()
+            
+            # Ensure each line in detailed_description is valid
+            valid_lines = [
+                line.strip() for line in response['detailed_description']
+                if line and isinstance(line, str) and line.strip()
+            ]
+            
+            if not valid_lines:
+                self.console.print("[yellow]Warning: No valid lines in detailed_description[/yellow]")
+                return self._get_default_commit_details()
+            
+            response['detailed_description'] = [
+                line if line.startswith("- ") else f"- {line}"
+                for line in valid_lines
+            ]
             
             return response
                 
@@ -390,7 +409,12 @@ class GitCommitAssistant:
             'type': 'feat',
             'scope': 'core',
             'description': 'update code',
-            'detailed_description': '',
+            'detailed_description': [
+                "- Added new functionality to improve system capabilities",
+                "- Enhanced code structure for better maintainability",
+                "- Improved user experience with clearer feedback",
+                "- Updated documentation to reflect changes"
+            ],
             'breaking_change': False,
             'breaking_description': ''
         }

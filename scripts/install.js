@@ -80,7 +80,21 @@ async function main() {
       '--upgrade',
       'setuptools',
       'wheel',
+      'keyring',
     ]);
+
+    // Install dev dependencies if in development mode
+    if (isDevelopment) {
+      console.log('Installing development dependencies...');
+      await runCommand(pythonPath, [
+        '-m',
+        'pip',
+        'install',
+        '-r',
+        path.join(packageRoot, 'requirements-dev.txt'),
+      ]);
+    }
+
     await runCommand(
       pythonPath,
       [

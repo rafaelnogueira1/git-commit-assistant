@@ -16,6 +16,30 @@ from git.exc import InvalidGitRepositoryError
 from pathlib import Path
 import questionary
 from .ai_services import GeminiService, OpenAIService, ClaudeService, DeepseekService
+import keyring
+
+class CredentialsManager:
+    """Secure credentials manager using system keyring."""
+    
+    APP_NAME = "git-commit-assistant"
+    
+    @staticmethod
+    def get_key(service: str) -> Optional[str]:
+        """Get API key for service from system keyring."""
+        return keyring.get_password(CredentialsManager.APP_NAME, service)
+    
+    @staticmethod
+    def set_key(service: str, api_key: str) -> None:
+        """Save API key for service in system keyring."""
+        keyring.set_password(CredentialsManager.APP_NAME, service, api_key)
+    
+    @staticmethod
+    def delete_key(service: str) -> None:
+        """Delete API key for service from system keyring."""
+        try:
+            keyring.delete_password(CredentialsManager.APP_NAME, service)
+        except keyring.errors.PasswordDeleteError:
+            pass
 
 class GitCommitAssistant:
     COMMIT_TYPES = [
@@ -464,6 +488,84 @@ class GitCommitAssistant:
             self._ensure_cwd()
             raise e
 
+def configure_ai_service() -> None:
+    """Interactive AI service configuration."""
+    console = Console()
+    
+    services = [
+        ("gemini", "Google's Gemini Pro - Best for general use"),
+        ("openai", "OpenAI's GPT-4 - Most powerful, but expensive"),
+        ("claude", "Anthropic's Claude - Great for complex tasks"),
+        ("deepseek", "Deepseek Coder - Specialized in code")
+    ]
+    
+    # Format choices for questionary
+    choices = [
+        f"{service} - {desc}" for service, desc in services
+    ]
+    
+    console.print("\n[bold blue]Available AI Services:[/bold blue]")
+    
+    # Interactive selection with arrow keys
+    selection = questionary.select(
+        "Select AI service to configure:",
+        choices=choices,
+    ).ask()
+    
+    if not selection:
+        sys.exit(0)
+        
+    selected_service = selection.split(" - ")[0]
+    
+    # Check for existing key
+    current_key = CredentialsManager.get_key(selected_service)
+    
+    if current_key:
+        console.print(f"\n[yellow]Current API key found for {selected_service}[/yellow]")
+        if not Confirm.ask("Do you want to update it?", default=False):
+            console.print("[green]Configuration kept unchanged[/green]")
+            return
+    
+    api_key = Prompt.ask("Enter your API key", password=True)
+    
+    # Save to keyring
+    CredentialsManager.set_key(selected_service, api_key)
+    console.print(f"\n[green]✓ API key securely saved for {selected_service}[/green]")
+
+def show_current_config() -> None:
+    """Show current AI service configuration."""
+    console = Console()
+    
+    services = {
+        'gemini': "Google's Gemini Pro",
+        'openai': "OpenAI's GPT-4",
+        'claude': "Anthropic's Claude",
+        'deepseek': "Deepseek Coder"
+    }
+    
+    # Get current service from env or default
+    current_service = os.getenv('AI_SERVICE', 'gemini')
+    
+    # Create table
+    table = Table(title="Current AI Service Configuration", show_header=True)
+    table.add_column("Service", style="cyan")
+    table.add_column("Description", style="yellow")
+    table.add_column("Status", style="green")
+    
+    # Add row for current service
+    has_key = bool(CredentialsManager.get_key(current_service))
+    status = "[green]✓ Configured[/green]" if has_key else "[red]× Not Configured[/red]"
+    table.add_row(
+        current_service,
+        services.get(current_service, "Unknown service"),
+        status
+    )
+    
+    console.print(table)
+    
+    if not has_key:
+        console.print("\n[yellow]Run 'gcommit --configure' to set up your API key[/yellow]")
+
 def main():
     try:
         parser = argparse.ArgumentParser(description="AI-powered Git commit assistant")
@@ -473,12 +575,31 @@ def main():
         parser.add_argument("-s", "--service", choices=['gemini', 'openai', 'claude', 'deepseek'], 
                           default=os.getenv('AI_SERVICE', 'gemini'),
                           help="AI service to use (default: gemini)")
+        parser.add_argument("-c", "--configure", action="store_true",
+                          help="Configure AI service and API key")
+        parser.add_argument("-l", "--list", action="store_true",
+                          help="Show current AI service configuration")
         args = parser.parse_args()
 
-        # Get API keys from environment
+        if args.list:
+            show_current_config()
+            sys.exit(0)
+
+        if args.configure:
+            configure_ai_service()
+            sys.exit(0)
+
+        # Get API key from keyring
+        api_key = CredentialsManager.get_key(args.service)
+        if not api_key:
+            console = Console()
+            console.print(f"[red]Error: No API key found for {args.service}[/red]")
+            console.print("[yellow]Run 'gcommit --configure' to set up your API key[/yellow]")
+            sys.exit(1)
+
         config = {
             'service': args.service,
-            'api_key': os.getenv(f"{args.service.upper()}_API_KEY")
+            'api_key': api_key
         }
 
         assistant = GitCommitAssistant(config)

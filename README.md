@@ -10,6 +10,7 @@ AI-powered Git commit assistant that helps you write better commit messages usin
 - 🎨 Beautiful CLI interface
 - 🔒 Protected branch validation
 - 🚀 Optional automatic push
+- 🔐 Secure API key storage using system keyring
 
 ## Installation
 
@@ -54,23 +55,30 @@ pip3 install git-commit-assistant
    - [Anthropic](https://console.anthropic.com/account/keys) for Claude
    - [Deepseek](https://platform.deepseek.com/) for Deepseek
 
-2. Set up your environment:
+2. Configure your API key:
 
 ```bash
-# For Gemini (default)
-export GEMINI_API_KEY='your-api-key'
+# Interactive configuration (recommended)
+gcommit --configure
 
-# For OpenAI
-export OPENAI_API_KEY='your-api-key'
-export AI_SERVICE='openai'
+# Or set environment variables
+export GEMINI_API_KEY='your-api-key'      # For Gemini
+export OPENAI_API_KEY='your-api-key'      # For OpenAI
+export ANTHROPIC_API_KEY='your-api-key'   # For Claude
+export DEEPSEEK_API_KEY='your-api-key'    # For Deepseek
+```
 
-# For Claude
-export ANTHROPIC_API_KEY='your-api-key'
-export AI_SERVICE='claude'
+3. Select your AI service:
 
-# For Deepseek
-export DEEPSEEK_API_KEY='your-api-key'
-export AI_SERVICE='deepseek'
+```bash
+# Check current configuration
+gcommit --list
+
+# Use specific service for one commit
+gcommit -s openai   # or gemini, claude, deepseek
+
+# Set default service
+export AI_SERVICE='openai'  # or gemini, claude, deepseek
 ```
 
 ## Usage
@@ -88,7 +96,9 @@ Available options:
 gcommit -a          # Stage all changes
 gcommit -p          # Push after commit
 gcommit -f          # Skip confirmations
-gcommit -s openai   # Use OpenAI service (or claude, deepseek)
+gcommit -s openai   # Use OpenAI service
+gcommit -c          # Configure AI service and API key
+gcommit -l          # Show current AI service configuration
 
 # Combine options
 gcommit -a -p       # Stage all changes and push

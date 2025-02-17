@@ -11,6 +11,7 @@ setup(
         "questionary>=2.0.1",
         "openai>=1.12.0",
         "anthropic>=0.18.1",
+        "keyring>=24.3.0",
     ],
     entry_points={
         "console_scripts": [

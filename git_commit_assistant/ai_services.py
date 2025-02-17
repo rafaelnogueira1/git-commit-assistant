@@ -189,7 +189,13 @@ class BaseAPIService(AIService):
 
     def analyze_changes(self, diff_content: str, files_changed: str) -> Dict:
         try:
+            if not diff_content and not files_changed:
+                print("No changes to analyze")
+                return self._get_default_response()
+
             prompt = self._format_prompt(diff_content, files_changed)
+            print(f"\nSending request to {self.__class__.__name__}...")
+            
             response = requests.post(
                 self.api_url,
                 headers=self.headers,
@@ -197,21 +203,79 @@ class BaseAPIService(AIService):
             )
             
             response.raise_for_status()
+            print(f"Got response from {self.__class__.__name__}")
+            
             content = self._extract_content(response.json())
-            return self._parse_ai_response(content)
+            if not content:
+                print(f"No content extracted from {self.__class__.__name__} response")
+                return self._get_default_response()
                 
+            print(f"Parsing response from {self.__class__.__name__}")
+            result = self._parse_ai_response(content)
+            
+            # Validate the result
+            if result == self._get_default_response():
+                print(f"Got default response from {self.__class__.__name__}, retrying...")
+                # Try one more time with a more explicit prompt
+                response = requests.post(
+                    self.api_url,
+                    headers=self.headers,
+                    json=self._get_request_body(prompt, retry=True)
+                )
+                response.raise_for_status()
+                content = self._extract_content(response.json())
+                if content:
+                    result = self._parse_ai_response(content)
+            
+            return result
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Network error in {self.__class__.__name__}: {str(e)}")
+            return self._get_default_response()
         except Exception as e:
             print(f"Error in {self.__class__.__name__}: {str(e)}")
             return self._get_default_response()
 
-    def _get_request_body(self, prompt: str) -> Dict:
+    def _get_request_body(self, prompt: str, retry: bool = False) -> Dict:
+        system_content = """You are a Git commit message analyzer. Your task is to analyze git changes and provide a structured commit message that follows conventional commits format.
+
+You MUST return a valid JSON object with the following structure:
+{
+    "type": "commit_type",
+    "scope": "affected_scope",
+    "description": "clear description of what changed",
+    "detailed_description": [
+        "- first detail about why and impact",
+        "- second detail about why and impact",
+        "- technical details if relevant"
+    ],
+    "breaking_change": boolean,
+    "breaking_description": "if breaking_change is true, explain why"
+}
+
+Rules:
+1. The response MUST be a valid JSON object
+2. The type MUST be one of: feat, fix, docs, style, refactor, perf, test, chore, ci
+3. The description MUST be clear, concise, and under 72 characters
+4. The detailed_description MUST be a list of strings, each starting with "- "
+5. Include at least 3 detailed description lines
+6. Focus on both WHAT changed and WHY it changed
+7. Be specific and technical, avoid generic descriptions
+8. NEVER return a generic response - analyze the actual changes"""
+
+        if retry:
+            system_content += """
+
+IMPORTANT: Your previous response was too generic. Please analyze the changes more carefully and provide a specific, detailed response based on the actual changes in the diff content."""
+
         return {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": "You are a Git commit message analyzer."},
+                {"role": "system", "content": system_content},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.3
+            "temperature": 0.3,
+            "max_tokens": 1000
         }
 
     @abstractmethod
@@ -276,25 +340,65 @@ class GeminiService(AIService):
 
     def analyze_changes(self, diff_content: str, files_changed: str) -> Dict:
         try:
+            if not diff_content and not files_changed:
+                print("No changes to analyze")
+                return self._get_default_response()
+
             prompt = self._format_prompt(diff_content, files_changed)
+            print("\nSending request to Gemini API...")
+            
+            system_content = """You are a Git commit message analyzer. Your task is to analyze git changes and provide a structured commit message that follows conventional commits format.
+
+You MUST return a valid JSON object with the following structure:
+{
+    "type": "commit_type",
+    "scope": "affected_scope",
+    "description": "clear description of what changed",
+    "detailed_description": [
+        "- first detail about why and impact",
+        "- second detail about why and impact",
+        "- technical details if relevant"
+    ],
+    "breaking_change": boolean,
+    "breaking_description": "if breaking_change is true, explain why"
+}
+
+Rules:
+1. The response MUST be a valid JSON object
+2. The type MUST be one of: feat, fix, docs, style, refactor, perf, test, chore, ci
+3. The description MUST be clear, concise, and under 72 characters
+4. The detailed_description MUST be a list of strings, each starting with "- "
+5. Include at least 3 detailed description lines
+6. Focus on both WHAT changed and WHY it changed
+7. Be specific and technical, avoid generic descriptions
+8. NEVER return a generic response - analyze the actual changes
+
+Analyze these changes:
+"""
+            
             response = requests.post(
                 f"{self.api_url}?key={self.api_key}",
                 headers=self.headers,
                 json={
-                    "contents": [{
-                        "parts": [{
-                            "text": prompt
-                        }]
-                    }],
+                    "contents": {
+                        "role": "user",
+                        "parts": [
+                            {"text": system_content},
+                            {"text": prompt}
+                        ]
+                    },
                     "generationConfig": {
                         "temperature": 0.3,
                         "topK": 1,
                         "topP": 0.8,
+                        "maxOutputTokens": 1000,
                     }
                 }
             )
             
             response.raise_for_status()
+            print("Got response from Gemini API")
+            
             response_data = response.json()
             
             if "error" in response_data:
@@ -302,12 +406,12 @@ class GeminiService(AIService):
                 return self._get_default_response()
                 
             if "candidates" not in response_data or not response_data["candidates"]:
-                print("No candidates in response")
+                print("No candidates in Gemini response")
                 return self._get_default_response()
                 
             candidate = response_data["candidates"][0]
             if "content" not in candidate or "parts" not in candidate["content"]:
-                print("Invalid response structure")
+                print("Invalid response structure from Gemini")
                 return self._get_default_response()
                 
             try:
@@ -315,11 +419,53 @@ class GeminiService(AIService):
                 if not content:
                     print("Empty content from Gemini API")
                     return self._get_default_response()
-                return self._parse_ai_response(content)
-            except (KeyError, IndexError):
-                print("Invalid response format from Gemini")
+                    
+                print("Parsing Gemini response")
+                result = self._parse_ai_response(content)
+                
+                # If we got a default response, try one more time with a more explicit prompt
+                if result == self._get_default_response():
+                    print("Got default response from Gemini, retrying...")
+                    system_content += """
+
+IMPORTANT: Your previous response was too generic. Please analyze the changes more carefully and provide a specific, detailed response based on the actual changes in the diff content."""
+                    
+                    response = requests.post(
+                        f"{self.api_url}?key={self.api_key}",
+                        headers=self.headers,
+                        json={
+                            "contents": {
+                                "role": "user",
+                                "parts": [
+                                    {"text": system_content},
+                                    {"text": prompt}
+                                ]
+                            },
+                            "generationConfig": {
+                                "temperature": 0.3,
+                                "topK": 1,
+                                "topP": 0.8,
+                                "maxOutputTokens": 1000,
+                            }
+                        }
+                    )
+                    
+                    response.raise_for_status()
+                    response_data = response.json()
+                    if "candidates" in response_data and response_data["candidates"]:
+                        content = response_data["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                        if content:
+                            result = self._parse_ai_response(content)
+                
+                return result
+                
+            except (KeyError, IndexError) as e:
+                print(f"Invalid response format from Gemini: {str(e)}")
                 return self._get_default_response()
                 
+        except requests.exceptions.RequestException as e:
+            print(f"Network error in Gemini service: {str(e)}")
+            return self._get_default_response()
         except Exception as e:
             print(f"Error in Gemini service: {str(e)}")
             return self._get_default_response() 

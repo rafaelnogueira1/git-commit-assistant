@@ -302,14 +302,120 @@ class OpenAIService(BaseAPIService):
         super().__init__(
             api_key=api_key,
             api_url="https://api.openai.com/v1/chat/completions",
-            model="gpt-4"
+            model="gpt-3.5-turbo"
         )
+        self.headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
+    def analyze_changes(self, diff_content: str, files_changed: str) -> Dict:
+        try:
+            if not diff_content and not files_changed:
+                print("No changes to analyze")
+                return self._get_default_response()
+
+            prompt = self._format_prompt(diff_content, files_changed)
+            print("\nSending request to OpenAI API...")
+            
+            # Try up to 3 times with exponential backoff
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    response = requests.post(
+                        self.api_url,
+                        headers=self.headers,
+                        json=self._get_request_body(prompt),
+                        timeout=30  # Add timeout
+                    )
+                    
+                    if response.status_code == 429:  # Rate limit
+                        wait_time = min(2 ** attempt, 8)  # Exponential backoff: 1, 2, 4, 8...
+                        print(f"Rate limited. Waiting {wait_time} seconds before retry...")
+                        import time
+                        time.sleep(wait_time)
+                        continue
+                        
+                    response.raise_for_status()
+                    break  # Success, exit retry loop
+                    
+                except requests.exceptions.RequestException as e:
+                    if attempt == max_retries - 1:  # Last attempt
+                        raise  # Re-raise the last error
+                    print(f"Request failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
+                    continue
+            
+            print("Got response from OpenAI API")
+            
+            content = self._extract_content(response.json())
+            if not content:
+                print("No content extracted from OpenAI response")
+                return self._get_default_response()
+                
+            print("Parsing OpenAI response")
+            result = self._parse_ai_response(content)
+            
+            # Validate the result
+            if result == self._get_default_response():
+                print("Got default response from OpenAI, retrying with more explicit prompt...")
+                # Try one more time with a more explicit prompt
+                response = requests.post(
+                    self.api_url,
+                    headers=self.headers,
+                    json=self._get_request_body(prompt, retry=True),
+                    timeout=30
+                )
+                response.raise_for_status()
+                content = self._extract_content(response.json())
+                if content:
+                    result = self._parse_ai_response(content)
+            
+            return result
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Network error in OpenAI service: {str(e)}")
+            return self._get_default_response()
+        except Exception as e:
+            print(f"Error in OpenAI service: {str(e)}")
+            return self._get_default_response()
+
+    def _get_request_body(self, prompt: str, retry: bool = False) -> Dict:
+        system_content = """You are a Git commit message analyzer. Your task is to analyze git changes and provide a structured commit message that follows conventional commits format.
+
+You MUST return a valid JSON object with the following structure:
+{
+    "type": "commit_type",
+    "scope": "affected_scope",
+    "description": "clear description of what changed",
+    "detailed_description": [
+        "- first detail about why and impact",
+        "- second detail about why and impact",
+        "- technical details if relevant"
+    ],
+    "breaking_change": boolean,
+    "breaking_description": "if breaking_change is true, explain why"
+}"""
+
+        if retry:
+            system_content += "\nIMPORTANT: Your previous response was too generic. Please be more specific."
+
+        return {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3,
+            "max_tokens": 500,
+            "n": 1,
+            "stream": False
+        }
 
     def _extract_content(self, response_data: Dict) -> str:
         try:
             return response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        except (KeyError, IndexError):
-            print("Invalid response format from OpenAI")
+        except (KeyError, IndexError) as e:
+            print(f"Invalid response format from OpenAI: {str(e)}")
             return ""
 
 class DeepseekService(BaseAPIService):
@@ -332,19 +438,102 @@ class ClaudeService(BaseAPIService):
         super().__init__(
             api_key=api_key,
             api_url="https://api.anthropic.com/v1/messages",
-            model="claude-3-opus-20240229"
+            model="claude-3-sonnet-20240229"
         )
         self.headers = {
             "Content-Type": "application/json",
             "x-api-key": api_key,
-            "anthropic-version": "2023-06-01"
+            "anthropic-version": "2024-01-01"
         }
+
+    def _get_request_body(self, prompt: str, retry: bool = False) -> Dict:
+        system_content = """You are a Git commit message analyzer. Your task is to analyze git changes and provide a structured commit message that follows conventional commits format.
+
+You MUST return a valid JSON object with the following structure:
+{
+    "type": "commit_type",
+    "scope": "affected_scope",
+    "description": "clear description of what changed",
+    "detailed_description": [
+        "- first detail about why and impact",
+        "- second detail about why and impact",
+        "- technical details if relevant"
+    ],
+    "breaking_change": boolean,
+    "breaking_description": "if breaking_change is true, explain why"
+}"""
+
+        if retry:
+            system_content += "\nIMPORTANT: Your previous response was too generic. Please be more specific."
+
+        return {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt
+                        }
+                    ]
+                }
+            ],
+            "system": system_content
+        }
+
+    def analyze_changes(self, diff_content: str, files_changed: str) -> Dict:
+        try:
+            if not diff_content and not files_changed:
+                print("No changes to analyze")
+                return self._get_default_response()
+
+            prompt = self._format_prompt(diff_content, files_changed)
+            print(f"\nSending request to {self.__class__.__name__}...")
+            
+            request_body = self._get_request_body(prompt)
+            print(f"Request body: {json.dumps(request_body, indent=2)}")
+            
+            response = requests.post(
+                self.api_url,
+                headers=self.headers,
+                json=request_body
+            )
+            
+            if response.status_code != 200:
+                print(f"Error response: {response.text}")
+                return self._get_default_response()
+            
+            response.raise_for_status()
+            print(f"Got response from {self.__class__.__name__}")
+            
+            content = self._extract_content(response.json())
+            if not content:
+                print(f"No content extracted from {self.__class__.__name__} response")
+                return self._get_default_response()
+                
+            print(f"Parsing response from {self.__class__.__name__}")
+            result = self._parse_ai_response(content)
+            return result
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Network error in {self.__class__.__name__}: {str(e)}")
+            return self._get_default_response()
+        except Exception as e:
+            print(f"Error in {self.__class__.__name__}: {str(e)}")
+            return self._get_default_response()
 
     def _extract_content(self, response_data: Dict) -> str:
         try:
-            return response_data.get("content", [{}])[0].get("text", "")
-        except (KeyError, IndexError):
-            print("Invalid response format from Claude")
+            content = response_data.get("content", [])
+            if content and isinstance(content, list):
+                for item in content:
+                    if item.get("type") == "text":
+                        return item.get("text", "")
+            return ""
+        except (KeyError, IndexError) as e:
+            print(f"Error extracting content: {str(e)}")
+            print(f"Response data: {json.dumps(response_data, indent=2)}")
             return ""
 
 class GeminiService(AIService):

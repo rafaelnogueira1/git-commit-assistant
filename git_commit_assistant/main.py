@@ -548,14 +548,23 @@ def configure_ai_service() -> None:
     if current_key:
         console.print(f"\n[yellow]Current API key found for {selected_service}[/yellow]")
         if not Confirm.ask("Do you want to update it?", default=False):
-            console.print("[green]Configuration kept unchanged[/green]")
+            # Save selected service as default even if key is not updated
+            with open(os.path.expanduser("~/.gitcommitrc"), "w") as f:
+                f.write(f"AI_SERVICE={selected_service}\n")
+            console.print(f"[green]✓ {selected_service} set as default service[/green]")
             return
     
     api_key = Prompt.ask("Enter your API key", password=True)
     
     # Save to keyring
     CredentialsManager.set_key(selected_service, api_key)
+    
+    # Save selected service as default
+    with open(os.path.expanduser("~/.gitcommitrc"), "w") as f:
+        f.write(f"AI_SERVICE={selected_service}\n")
+    
     console.print(f"\n[green]✓ API key securely saved for {selected_service}[/green]")
+    console.print(f"[green]✓ {selected_service} set as default service[/green]")
 
 def show_current_config() -> None:
     """Show current AI service configuration."""
@@ -568,8 +577,16 @@ def show_current_config() -> None:
         'deepseek': "Deepseek Coder"
     }
     
-    # Get current service from env or default
-    current_service = os.getenv('AI_SERVICE', 'gemini')
+    # Get current service from config file or default
+    current_service = 'gemini'  # Default
+    try:
+        with open(os.path.expanduser("~/.gitcommitrc")) as f:
+            for line in f:
+                if line.startswith("AI_SERVICE="):
+                    current_service = line.strip().split("=")[1]
+                    break
+    except FileNotFoundError:
+        pass
     
     # Create table
     table = Table(title="Current AI Service Configuration", show_header=True)
@@ -591,6 +608,44 @@ def show_current_config() -> None:
     if not has_key:
         console.print("\n[yellow]Run 'gcommit --configure' to set up your API key[/yellow]")
 
+def remove_api_key() -> None:
+    """Remove API key for a service."""
+    console = Console()
+    
+    services = [
+        ("gemini", "Google's Gemini Pro"),
+        ("openai", "OpenAI's GPT-4"),
+        ("claude", "Anthropic's Claude"),
+        ("deepseek", "Deepseek Coder")
+    ]
+    
+    # Format choices for questionary
+    choices = [
+        f"{service} - {desc}" for service, desc in services
+    ]
+    
+    console.print("\n[bold blue]Select service to remove API key:[/bold blue]")
+    
+    # Interactive selection with arrow keys
+    selection = questionary.select(
+        "Select service:",
+        choices=choices,
+    ).ask()
+    
+    if not selection:
+        sys.exit(0)
+        
+    selected_service = selection.split(" - ")[0]
+    
+    # Check if key exists
+    if not CredentialsManager.get_key(selected_service):
+        console.print(f"\n[yellow]No API key found for {selected_service}[/yellow]")
+        return
+    
+    if Confirm.ask(f"Are you sure you want to remove the API key for {selected_service}?", default=False):
+        CredentialsManager.delete_key(selected_service)
+        console.print(f"\n[green]✓ API key removed for {selected_service}[/green]")
+
 def main():
     try:
         parser = argparse.ArgumentParser(description="AI-powered Git commit assistant")
@@ -598,13 +653,18 @@ def main():
         parser.add_argument("-f", "--force", action="store_true", help="Skip intermediate confirmations")
         parser.add_argument("-p", "--push", action="store_true", help="Push after commit")
         parser.add_argument("-s", "--service", choices=['gemini', 'openai', 'claude', 'deepseek'], 
-                          default=os.getenv('AI_SERVICE', 'gemini'),
-                          help="AI service to use (default: gemini)")
+                          help="AI service to use (default: from config or gemini)")
         parser.add_argument("-c", "--configure", action="store_true",
                           help="Configure AI service and API key")
         parser.add_argument("-l", "--list", action="store_true",
                           help="Show current AI service configuration")
+        parser.add_argument("-r", "--remove-key", action="store_true",
+                          help="Remove API key for a service")
         args = parser.parse_args()
+
+        if args.remove_key:
+            remove_api_key()
+            sys.exit(0)
 
         if args.list:
             show_current_config()
@@ -614,16 +674,29 @@ def main():
             configure_ai_service()
             sys.exit(0)
 
+        # Get service from command line, config file, or default
+        service = args.service
+        if not service:
+            try:
+                with open(os.path.expanduser("~/.gitcommitrc")) as f:
+                    for line in f:
+                        if line.startswith("AI_SERVICE="):
+                            service = line.strip().split("=")[1]
+                            break
+            except FileNotFoundError:
+                pass
+        service = service or 'gemini'  # Default to gemini if not set
+
         # Get API key from keyring
-        api_key = CredentialsManager.get_key(args.service)
+        api_key = CredentialsManager.get_key(service)
         if not api_key:
             console = Console()
-            console.print(f"[red]Error: No API key found for {args.service}[/red]")
+            console.print(f"[red]Error: No API key found for {service}[/red]")
             console.print("[yellow]Run 'gcommit --configure' to set up your API key[/yellow]")
             sys.exit(1)
 
         config = {
-            'service': args.service,
+            'service': service,
             'api_key': api_key
         }
 
